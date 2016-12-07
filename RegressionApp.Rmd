@@ -1,0 +1,270 @@
+---
+title: "[Regression App](https://tevgeniou.github.io/RegressionApp/)"
+author: "[T. Evgeniou](http://faculty.insead.edu/theodoros-evgeniou/), INSEAD"
+output: 
+  html_document:
+    toc: true
+    toc_float: 
+      collapsed: false
+      smooth_scroll: true
+    toc_depth: 3
+    theme: paper
+runtime: shiny
+---
+
+`r knitr::opts_knit$set(progress=FALSE, verbose=FALSE)`
+
+```{r echo=FALSE, eval=TRUE, message=FALSE, warning=FALSE}
+suppressPackageStartupMessages({
+  library(shiny)
+  library(knitr)
+  load("AllDatasets.Rdata")
+})  # end suppressPackageStartupMessages
+
+tags$style(type="text/css", "p { text-align:justify; }")
+tags$style(type="text/css", # see #96 for details
+" @media (min-width: 768px) and (max-width: 991px) {
+    .col-sm-8 { width: 82%; }
+    .col-sm-4 { width: 18%; }
+    div.tocify { width: 16%; }
+  }"
+)
+```
+
+<br>
+
+## Overview
+
+This interactive toolkit can be used to run regression models. A number of datasets are available, however if custom data need to be analysed the source code of the tool should be pulled from the [tool repo](https://github.com/tevgeniou/UDJ) and modified accordingly. 
+
+Regression analysis can be done in different ways. For example
+
+1. Choose dependent and independent variables 
+2. Study scatterplots, check for outliers and correlation matrix (also look for Multicollinerarity).
+3. Run a first regression.
+4. Deal with multicolinearity. 
+5. If F-test is not  significant, then do not continue, or return to step 1.
+6. Check for significance of coefficients (t-test)
+7. Deal with insignificant variables
+8. Check regression assumptions using residual analysis
+9. Consider nonlinear transformations and other independent variables
+9. Use adjusted R-square, as well as intuition, to select among different regressions
+10. Interpret, explain, and predict (point and confidence intervals)
+11. Check again for outliers and if necessary go back to step 2 or 1
+
+The sections below allow the analysis following such a process. 
+
+## Select Dataset
+
+The following datasets are available for analysis using the web-based tool. 
+
+```{r echo=FALSE, eval=TRUE, message=FALSE, warning=FALSE}
+
+fluidPage(
+  # Major markets
+  fluidRow(
+    column(12, selectInput("datasetused", 
+                           "Select the dataset to use",
+                           choices= names(all_datasets),
+                           selected = "SalesExerciseData",
+                           multiple=FALSE, width="100%"))
+  )
+)
+
+dataset <- reactive({
+  all_datasets[[input$datasetused]]
+})
+
+```
+
+## Select Variables
+
+```{r echo=FALSE, eval=TRUE, message=FALSE, warning=FALSE}
+renderUI({fluidPage(
+  fluidRow(
+    column(12, selectInput("dependentvar", 
+                           "Select the Dependent Variable to use",
+                           choices= colnames(dataset()),
+                           selected = "SALES",
+                           multiple=FALSE, width="100%"))
+  )
+)
+})
+
+renderUI({fluidPage(
+  fluidRow(
+    column(12, selectizeInput("independentvar", 
+                              "Select the Independent Variables to use",
+                              choices= setdiff(colnames(dataset()),input$dependentvar),
+                              selected = setdiff(colnames(dataset()),input$dependentvar),
+                              multiple=TRUE, width="100%",
+                              options=list(plugins=c("remove_button","drag_drop"))))
+  )
+)
+})
+```
+
+
+## Study Scatterplots
+
+```{r echo=FALSE, eval=TRUE, message=FALSE, warning=FALSE}
+renderUI({fluidPage(
+  fluidRow(
+    column(6, selectInput("scatter1", 
+                           "Select the x-axis Variable",
+                           choices= colnames(dataset()),
+                           selected = colnames(dataset())[1],
+                           multiple=FALSE, width="100%")),
+    column(6, selectInput("scatter2", 
+                           "Select the y-axis Variable",
+                           choices= colnames(dataset()),
+                           selected = colnames(dataset())[2],
+                           multiple=FALSE, width="100%"))
+    
+  )
+)
+})
+
+
+renderPlot({
+  validate(
+    need(input$scatter1, message=FALSE),
+    need(input$scatter2, message=FALSE)
+  )
+  scatter1 <- input$scatter1
+  scatter2 <- input$scatter2
+  dataset <- isolate(dataset())
+  plot(dataset[[scatter1]],dataset[[scatter2]], xlab=scatter1, ylab=scatter2)
+}) 
+
+```
+
+## Study Correlation
+
+```{r echo=FALSE, eval=TRUE, message=FALSE, warning=FALSE}
+renderTable({
+  validate(
+    need(input$dependentvar, message=FALSE),
+    need(input$independentvar, message=FALSE)
+  )
+  dependentvar <- input$dependentvar
+  independentvar <- input$independentvar
+  dataset <- isolate(dataset())
+  cor(dataset[,c(dependentvar,independentvar)])
+})
+
+```
+
+
+## Regression Output
+
+```{r echo=FALSE, eval=TRUE, message=FALSE, warning=FALSE}
+the_regression_output <- reactive({
+  validate(
+    need(input$dependentvar, message=FALSE),
+    need(input$independentvar, message=FALSE)
+  )
+  dependentvar <- input$dependentvar
+  independentvar <- input$independentvar
+  dataset <- isolate(dataset())
+  regression_model = as.formula(paste(dependentvar, " ~ ",paste(independentvar,collapse = "+"), sep=""))
+  the_fit<-lm(regression_model,data=dataset)      
+  
+  print_the_fit<-as.list(summary(the_fit))
+  the_res= c(
+    print_the_fit$r.squared,
+    print_the_fit$adj.r.squared,
+    print_the_fit$fstatistic["value"],
+    pf(
+      print_the_fit$fstatistic[1],
+      print_the_fit$fstatistic[2],
+      print_the_fit$fstatistic[3],
+      lower.tail = FALSE
+    ),
+    sqrt(deviance(the_fit)/df.residual(the_fit)),
+    the_fit$df
+  )
+  the_res = as.matrix(the_res,ncol=1)
+  rownames(the_res)<-c("R square","Adjusted R Square", "F-statistic", "p-value",
+                       "Residual standard error","degrees of freedom")
+  colnames(the_res)<-"Values"
+  the_res = as.data.frame(the_res)
+  list(
+    the_fit=the_fit,
+     the_res = the_res
+  )
+})
+
+renderTable({
+  the_fit_all = the_regression_output()
+  summary(the_fit_all$the_fit)
+})
+
+```
+
+## Residual Analysis
+
+### Plot of the Residuals
+```{r echo=FALSE, eval=TRUE, message=FALSE, warning=FALSE}
+the_residuals_plot_tab<-reactive({
+  the_fit = the_regression_output()    
+  residuals(the_fit$the_fit)       
+})
+
+renderPlot({    
+  plot(the_residuals_plot_tab(),xlab="Observations",ylab="Residuals",main="The Residuals")
+})
+```
+
+
+### Residuals Histogram
+```{r echo=FALSE, eval=TRUE, message=FALSE, warning=FALSE}
+
+renderPlot({    
+  dataused = the_residuals_plot_tab()
+  hist(dataused, main = "Histogram of the Residuals", breaks = max(5,round(length(dataused)/5)))
+})
+
+```
+
+### Residuals Scatterplots
+
+```{r echo=FALSE, eval=TRUE, message=FALSE, warning=FALSE}
+renderUI({fluidPage(
+  fluidRow(
+    column(12, selectInput("resscatter1", 
+                           "Select the Variable to plot against the residuals",
+                           choices= colnames(dataset()),
+                           selected = colnames(dataset())[1],
+                           multiple=FALSE, width="100%"))
+  )
+)
+})
+
+
+
+renderPlot({
+  validate(
+    need(input$resscatter1, message=FALSE)
+  )
+  resscatter1 <- input$resscatter1
+  dataset <- isolate(dataset())
+  plot(dataset[[resscatter1]],the_residuals_plot_tab(),xlab=resscatter1,ylab="Residuals")
+})
+
+```
+
+<hr>
+
+<div style="height: 450px;" class="tocify-extend-page" data-unique="tocify-extend-page">
+</div>
+
+<script>
+$(document).ready(function() {
+    console.log("Initializing 'selectize-control' patch...");
+    setTimeout(function() {
+        console.log("Applying 'selectize-control' patch...");
+        $(".selectize-control").addClass("single");
+    }, 1000);
+});
+</script>
