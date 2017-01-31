@@ -9,16 +9,17 @@ output:
       smooth_scroll: true
     toc_depth: 3
     theme: paper
-runtime: shiny
+runtime: shiny_prerendered
 ---
 
 `r knitr::opts_knit$set(progress=FALSE, verbose=FALSE)`
 
-```{r echo=FALSE, eval=TRUE, message=FALSE, warning=FALSE}
+```{r context="setup", echo=FALSE}
 suppressPackageStartupMessages({
   library(shiny)
   library(knitr)
   library(c3)
+  library(formattable)
   load("AllDatasets.Rdata")
 })  # end suppressPackageStartupMessages
 
@@ -30,6 +31,13 @@ tags$style(type="text/css", # see #96 for details
     div.tocify { width: 16%; }
   }"
 )
+
+tags$style(type="text/css", ".c3 svg { font-size:13px; font-family:\"Roboto\", \"Helvetica Neue\", Helvetica, Arial, sans-serif; }")
+tags$style(type="text/css", ".formattable_widget { overflow:auto; max-height:425px; margin-bottom:23px; }")
+tags$style(type="text/css", ".formattable_widget table { margin-bottom:0; }")
+tags$style(type="text/css", ".formattable_widget td, .formattable_widget th { white-space: nowrap; }")
+
+opts_chunk$set(echo=FALSE)
 ```
 
 <br>
@@ -59,75 +67,79 @@ The sections below allow the analysis following such a process.
 
 The following datasets are available for analysis using the web-based tool. 
 
-```{r echo=FALSE, eval=TRUE, message=FALSE, warning=FALSE}
+```{r context="render"}
+# Major markets
+fluidRow(column(12, 
+  selectInput("datasetused", 
+              "Select the dataset to use",
+              choices = names(all_datasets),
+              selected = "SalesExerciseData",
+              multiple=FALSE, width="100%")
+))
+```
 
-fluidPage(
-  # Major markets
-  fluidRow(
-    column(12, selectInput("datasetused", 
-                           "Select the dataset to use",
-                           choices= names(all_datasets),
-                           selected = "SalesExerciseData",
-                           multiple=FALSE, width="100%"))
-  )
-)
-
+```{r context="server"}
 dataset <- reactive({
   all_datasets[[input$datasetused]]
 })
-
 ```
 
 ## Select Variables
 
-```{r echo=FALSE, eval=TRUE, message=FALSE, warning=FALSE}
-renderUI({fluidPage(
-  fluidRow(
-    column(12, selectInput("dependentvar", 
-                           "Select the Dependent Variable to use",
-                           choices= colnames(dataset()),
-                           selected = "SALES",
-                           multiple=FALSE, width="100%"))
-  )
-)
-})
-
-renderUI({fluidPage(
-  fluidRow(
-    column(12, selectizeInput("independentvar", 
-                              "Select the Independent Variables to use",
-                              choices= setdiff(colnames(dataset()),input$dependentvar),
-                              selected = setdiff(colnames(dataset()),input$dependentvar),
-                              multiple=TRUE, width="100%",
-                              options=list(plugins=c("remove_button","drag_drop"))))
-  )
-)
-})
+```{r context="render"}
+uiOutput("dependentvarUI")
+uiOutput("independentvarUI")
 ```
 
+```{r context="server"}
+output$dependentvarUI <- renderUI({fluidRow(column(12, 
+  selectInput(
+    "dependentvar", 
+    "Select the Dependent Variable to use",
+    choices = colnames(dataset()),
+    selected = "SALES",
+    multiple=FALSE, width="100%"
+  )
+))})
+
+output$independentvarUI <- renderUI({fluidRow(column(12, 
+  selectizeInput(
+    "independentvar", 
+    "Select the Independent Variables to use",
+    choices = setdiff(colnames(dataset()),input$dependentvar),
+    selected = setdiff(colnames(dataset()),input$dependentvar),
+    multiple=TRUE, width="100%",
+    options=list(plugins=c("remove_button","drag_drop"))
+  )
+))})
+```
 
 ## Study Scatterplots
 
-```{r echo=FALSE, eval=TRUE, message=FALSE, warning=FALSE}
-renderUI({fluidPage(
-  fluidRow(
-    column(6, selectInput("scatter1", 
-                           "Select the x-axis Variable",
-                           choices= colnames(dataset()),
-                           selected = colnames(dataset())[1],
-                           multiple=FALSE, width="100%")),
-    column(6, selectInput("scatter2", 
-                           "Select the y-axis Variable",
-                           choices= colnames(dataset()),
-                           selected = colnames(dataset())[2],
-                           multiple=FALSE, width="100%"))
-    
+```{r context="render"}
+uiOutput("scatterUI")
+tags$div(style='height:600px', c3Output("scatterC3"))
+```
+
+```{r context="server"}
+output$scatterUI <- renderUI({fluidRow(
+  column(6, selectInput(
+    "scatter1", 
+    "Select the x-axis Variable",
+    choices = colnames(dataset()),
+    selected = colnames(dataset())[1],
+    multiple=FALSE, width="100%")
+  ),
+  column(6, selectInput(
+    "scatter2", 
+    "Select the y-axis Variable",
+    choices = colnames(dataset()),
+    selected = colnames(dataset())[2],
+    multiple=FALSE, width="100%")
   )
-)
-})
+)})
 
-
-tags$div(style='height:480px', renderC3({
+output$scatterC3 <- renderC3({
   shiny::validate(
     need(input$scatter1, message=FALSE),
     need(input$scatter2, message=FALSE)
@@ -140,14 +152,17 @@ tags$div(style='height:480px', renderC3({
     xAxis(label=scatter1) %>% 
     yAxis(label=scatter2) %>%
     legend(hide="y")
-}))
-
+})
 ```
 
 ## Study Correlation
 
-```{r echo=FALSE, eval=TRUE, message=FALSE, warning=FALSE}
-renderTable({
+```{r context="render"}
+formattableOutput("correlationTable")
+```
+
+```{r context="server"}
+output$correlationTable <- renderFormattable({
   shiny::validate(
     need(input$dependentvar, message=FALSE),
     need(input$independentvar, message=FALSE)
@@ -155,15 +170,24 @@ renderTable({
   dependentvar <- input$dependentvar
   independentvar <- input$independentvar
   dataset <- isolate(dataset())
-  cor(dataset[,c(dependentvar,independentvar)])
+  df <- as.data.frame(cor(dataset[,c(dependentvar,independentvar)]))
+  
+  normalize.abs <- function(x, min=0, max=1, na.rm=FALSE) normalize(abs(x), min, max, na.rm)
+  x <- lapply(colnames(df), function(col) {
+    color_bar(rgb(238, 238, 238, max=255), normalize.abs, min=0.1, na.rm=TRUE)
+  })
+  names(x) <- colnames(df)
+  formattable(df, x, digits=2)
 })
-
 ```
-
 
 ## Regression Output
 
-```{r echo=FALSE, eval=TRUE, message=FALSE, warning=FALSE}
+```{r context="render"}
+verbatimTextOutput("regressionOutput")
+```
+
+```{r context="server"}
 the_regression_output <- reactive({
   shiny::validate(
     need(input$dependentvar, message=FALSE),
@@ -200,63 +224,71 @@ the_regression_output <- reactive({
   )
 })
 
-renderPrint({
+output$regressionOutput <- renderPrint({
   the_fit_all = the_regression_output()
   summary(the_fit_all$the_fit)
 })
-
 ```
 
 ## Residual Analysis
 
 ### Plot of the Residuals
-```{r echo=FALSE, eval=TRUE, message=FALSE, warning=FALSE}
+
+```{r context="render"}
+tags$div(style='height:600px', c3Output("residualsPlot"))
+```
+
+```{r context="server"}
 the_residuals_plot_tab<-reactive({
   the_fit = the_regression_output()    
   residuals(the_fit$the_fit)       
 })
 
-tags$div(style='height:480px', renderC3({
+output$residualsPlot <- renderC3({
   y <- the_residuals_plot_tab()
   c3(data.frame(x=1:length(y), y=y), x="x", y="y") %>%
     c3_scatter() %>%
     xAxis(label="Observations") %>% 
     yAxis(label="Residuals") %>%
     legend(hide="y")
-}))
+})
 ```
 
-
 ### Residuals Histogram
-```{r echo=FALSE, eval=TRUE, message=FALSE, warning=FALSE}
 
-tags$div(style='height:480px', renderC3({    
+```{r context="render"}
+tags$div(style='height:600px', c3Output("residualsHist"))
+```
+
+```{r context="server"}
+output$residualsHist <- renderC3({    
   x <- the_residuals_plot_tab()
   h <- hist(x, breaks=max(5, round(length(x)/5)), plot=FALSE)
   df <- data.frame(x=head(h$breaks, -1), Frequency=h$counts)
   c3(df, x="x", y="Frequency") %>%
     c3_bar()
-}))
-
+})
 ```
 
 ### Residuals Scatterplots
 
-```{r echo=FALSE, eval=TRUE, message=FALSE, warning=FALSE}
-renderUI({fluidPage(
-  fluidRow(
-    column(12, selectInput("resscatter1", 
-                           "Select the Variable to plot against the residuals",
-                           choices= colnames(dataset()),
-                           selected = colnames(dataset())[1],
-                           multiple=FALSE, width="100%"))
+```{r context="render"}
+uiOutput("resscatterUI")
+tags$div(style='height:600px', c3Output("resscatterPlot"))
+```
+
+```{r context="server"}
+output$resscatterUI <- renderUI({fluidRow(column(12,
+  selectInput(
+    "resscatter1", 
+    "Select the Variable to plot against the residuals",
+    choices = colnames(dataset()),
+    selected = colnames(dataset())[1],
+    multiple=FALSE, width="100%")
   )
-)
-})
+)})
 
-
-
-tags$div(style='height:480px', renderC3({
+output$resscatterPlot <- renderC3({
   shiny::validate(
     need(input$resscatter1, message=FALSE)
   )
@@ -267,8 +299,7 @@ tags$div(style='height:480px', renderC3({
     xAxis(label=resscatter1) %>% 
     yAxis(label="Residuals") %>%
     legend(hide="y")
-}))
-
+})
 ```
 
 <hr>
