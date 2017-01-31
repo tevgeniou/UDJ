@@ -18,6 +18,7 @@ runtime: shiny
 suppressPackageStartupMessages({
   library(shiny)
   library(knitr)
+  library(c3)
   load("AllDatasets.Rdata")
 })  # end suppressPackageStartupMessages
 
@@ -126,16 +127,20 @@ renderUI({fluidPage(
 })
 
 
-renderPlot({
-  validate(
+tags$div(style='height:480px', renderC3({
+  shiny::validate(
     need(input$scatter1, message=FALSE),
     need(input$scatter2, message=FALSE)
   )
   scatter1 <- input$scatter1
   scatter2 <- input$scatter2
   dataset <- isolate(dataset())
-  plot(dataset[[scatter1]],dataset[[scatter2]], xlab=scatter1, ylab=scatter2)
-}) 
+  c3(cbind.data.frame(x=dataset[[scatter1]],y=dataset[[scatter2]]), x="x", y="y") %>%
+    c3_scatter() %>%
+    xAxis(label=scatter1) %>% 
+    yAxis(label=scatter2) %>%
+    legend(hide="y")
+}))
 
 ```
 
@@ -143,7 +148,7 @@ renderPlot({
 
 ```{r echo=FALSE, eval=TRUE, message=FALSE, warning=FALSE}
 renderTable({
-  validate(
+  shiny::validate(
     need(input$dependentvar, message=FALSE),
     need(input$independentvar, message=FALSE)
   )
@@ -160,7 +165,7 @@ renderTable({
 
 ```{r echo=FALSE, eval=TRUE, message=FALSE, warning=FALSE}
 the_regression_output <- reactive({
-  validate(
+  shiny::validate(
     need(input$dependentvar, message=FALSE),
     need(input$independentvar, message=FALSE)
   )
@@ -195,7 +200,7 @@ the_regression_output <- reactive({
   )
 })
 
-renderTable({
+renderPrint({
   the_fit_all = the_regression_output()
   summary(the_fit_all$the_fit)
 })
@@ -211,19 +216,27 @@ the_residuals_plot_tab<-reactive({
   residuals(the_fit$the_fit)       
 })
 
-renderPlot({    
-  plot(the_residuals_plot_tab(),xlab="Observations",ylab="Residuals",main="The Residuals")
-})
+tags$div(style='height:480px', renderC3({
+  y <- the_residuals_plot_tab()
+  c3(data.frame(x=1:length(y), y=y), x="x", y="y") %>%
+    c3_scatter() %>%
+    xAxis(label="Observations") %>% 
+    yAxis(label="Residuals") %>%
+    legend(hide="y")
+}))
 ```
 
 
 ### Residuals Histogram
 ```{r echo=FALSE, eval=TRUE, message=FALSE, warning=FALSE}
 
-renderPlot({    
-  dataused = the_residuals_plot_tab()
-  hist(dataused, main = "Histogram of the Residuals", breaks = max(5,round(length(dataused)/5)))
-})
+tags$div(style='height:480px', renderC3({    
+  x <- the_residuals_plot_tab()
+  h <- hist(x, breaks=max(5, round(length(x)/5)), plot=FALSE)
+  df <- data.frame(x=head(h$breaks, -1), Frequency=h$counts)
+  c3(df, x="x", y="Frequency") %>%
+    c3_bar()
+}))
 
 ```
 
@@ -243,14 +256,18 @@ renderUI({fluidPage(
 
 
 
-renderPlot({
-  validate(
+tags$div(style='height:480px', renderC3({
+  shiny::validate(
     need(input$resscatter1, message=FALSE)
   )
   resscatter1 <- input$resscatter1
   dataset <- isolate(dataset())
-  plot(dataset[[resscatter1]],the_residuals_plot_tab(),xlab=resscatter1,ylab="Residuals")
-})
+  c3(cbind.data.frame(x=dataset[[resscatter1]],y=the_residuals_plot_tab()), x="x", y="y") %>%
+    c3_scatter() %>%
+    xAxis(label=resscatter1) %>% 
+    yAxis(label="Residuals") %>%
+    legend(hide="y")
+}))
 
 ```
 
