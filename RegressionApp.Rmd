@@ -44,7 +44,7 @@ opts_chunk$set(echo=FALSE)
 html.summary.lm <- function (x, digits = max(3L, getOption("digits") - 3L), ...) {
   tag.list <- list()
   tag.print <- function(...) tag.list <<- c(tag.list, tagList(...))
-  tag.table <- function(x, ...) tag.print(HTML(kable(as.data.frame(x), format="html", table.attr = "class='table'", ...)))
+  tag.table <- function(x, ...) tag.print(tags$div(class="formattable_widget", HTML(kable(as.data.frame(x), format="html", table.attr = "class='table'", ...))))
   
   tag.print(
     tags$h4("Call:"),
