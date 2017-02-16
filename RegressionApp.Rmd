@@ -46,34 +46,34 @@ html.summary.lm <- function (x, digits = max(3L, getOption("digits") - 3L), ...)
   tag.print <- function(...) tag.list <<- c(tag.list, tagList(...))
   tag.table <- function(x, ...) tag.print(tags$div(class="formattable_widget", HTML(kable(as.data.frame(x), format="html", table.attr = "class='table'", ...))))
   
-  tag.print(
-    tags$h4("Call:"),
-    tags$pre(paste(deparse(x$call), sep="\n", collapse = "\n")),
-    tags$br()
-  )
+# tag.print(
+#   tags$h4("Call:"),
+#   tags$pre(paste(deparse(x$call), sep="\n", collapse = "\n")),
+#   tags$br()
+# )
   
-  resid <- x$residuals
+# resid <- x$residuals
   df <- x$df
   rdf <- df[2L]
-  tag.print(tags$h4(paste0(
-    if(!is.null(x$weights) && diff(range(x$weights))) "Weighted ",
-    "Residuals:"
-  )))
-  if (rdf > 5L) {
-    nam <- c("Min", "1Q", "Median", "3Q", "Max")
-    rq <- if (length(dim(resid)) == 2L) {
-      structure(apply(t(resid), 1L, quantile),
-	      dimnames = list(nam, dimnames(resid)[[2L]]))
-    } else  {
-      zz <- zapsmall(quantile(resid), digits + 1L)
-      structure(zz, names = nam)
-    }
-    tag.table(t(rq), digits = digits, ...)
-  } else if (rdf > 0L) {
-    tag.table(t(resid), digits = digits, ...)
-  } else { # rdf == 0 : perfect fit!
-    tag.print(paste("ALL", df[1L], "residuals are 0: no residual degrees of freedom!"))
-  }
+# tag.print(tags$h4(paste0(
+#   if(!is.null(x$weights) && diff(range(x$weights))) "Weighted ",
+#   "Residuals:"
+# )))
+# if (rdf > 5L) {
+#   nam <- c("Min", "1Q", "Median", "3Q", "Max")
+#   rq <- if (length(dim(resid)) == 2L) {
+#     structure(apply(t(resid), 1L, quantile),
+#       dimnames = list(nam, dimnames(resid)[[2L]]))
+#   } else  {
+#     zz <- zapsmall(quantile(resid), digits + 1L)
+#     structure(zz, names = nam)
+#   }
+#   tag.table(t(rq), digits = digits, ...)
+# } else if (rdf > 0L) {
+#   tag.table(t(resid), digits = digits, ...)
+# } else { # rdf == 0 : perfect fit!
+#   tag.print(paste("ALL", df[1L], "residuals are 0: no residual degrees of freedom!"))
+# }
   
   tag.print(tags$h4("Coefficients:"))
   if (length(x$aliased) == 0L) {
@@ -93,13 +93,15 @@ html.summary.lm <- function (x, digits = max(3L, getOption("digits") - 3L), ...)
     xm <- data.matrix(coefs)
     pv <- as.vector(xm[, nc]) # drop names
     Signif <- symnum(pv, corr = FALSE, na = FALSE,
-				             cutpoints = c(0,  .001,.01,.05, .1, 1),
-				             symbols   =  c("***","**","*","."," "))
+#                    cutpoints = c(0,  .001,.01,.05, .1, 1),
+#                    symbols   =  c("***","**","*","."," "))
+                     cutpoints = c(0, .01, .05, .1,  1),
+                     symbols   = c("**", "*", "+", " "))
     Cf <- cbind.data.frame(coefs, Signif=format(Signif))
     tag.table(Cf, digits=digits)
-    tag.print(tags$div(style="margin-top:-10px", 
+    tag.print(tags$div(style="margin-top:-10px; margin-bottom:20px;", 
       "Signif. codes:", 
-      tags$pre(attr(Signif,"legend")), tags$br()
+      tags$pre(attr(Signif,"legend"))
     ))
   }
 
