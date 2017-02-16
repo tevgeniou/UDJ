@@ -88,9 +88,19 @@ html.summary.lm <- function (x, digits = max(3L, getOption("digits") - 3L), ...)
       coefs <- matrix(NA, length(aliased), 4, dimnames=list(cn, colnames(coefs)))
       coefs[!aliased, ] <- x$coefficients
     }
-    tag.table(coefs, digits=digits)
-      # printCoefmat(coefs, digits = digits, signif.stars = signif.stars,
-      #              na.print = "NA", ...)
+    # TODO: handle `Signif` computation errors and NAs in `coefs`
+    nc <- ncol(coefs)
+    xm <- data.matrix(coefs)
+    pv <- as.vector(xm[, nc]) # drop names
+    Signif <- symnum(pv, corr = FALSE, na = FALSE,
+				             cutpoints = c(0,  .001,.01,.05, .1, 1),
+				             symbols   =  c("***","**","*","."," "))
+    Cf <- cbind.data.frame(coefs, Signif=format(Signif))
+    tag.table(Cf, digits=digits)
+    tag.print(tags$div(style="margin-top:-10px", 
+      "Signif. codes:", 
+      tags$pre(attr(Signif,"legend")), tags$br()
+    ))
   }
 
   tag.print(tags$h4("Statistics:"))
@@ -118,7 +128,6 @@ html.summary.lm <- function (x, digits = max(3L, getOption("digits") - 3L), ...)
   
   tag.list
 }
-
 ```
 
 <br>
