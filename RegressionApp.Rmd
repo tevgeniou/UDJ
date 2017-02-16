@@ -385,7 +385,8 @@ tags$div(style='height:600px', c3Output("residualsHist"))
 ```{r context="server"}
 output$residualsHist <- renderC3({    
   x <- the_residuals_plot_tab()
-  h <- hist(x, breaks=max(5, round(length(x)/5)), plot=FALSE)
+# h <- hist(x, breaks=max(5, round(length(x)/5)), plot=FALSE)
+  h <- hist(x, plot=FALSE)
   df <- data.frame(x=head(h$breaks, -1), Frequency=h$counts)
   c3(df, x="x", y="Frequency") %>%
     c3_bar() %>%
