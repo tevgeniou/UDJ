@@ -259,11 +259,12 @@ output$scatterC3 <- renderC3({
 ## Correlations
 
 ```{r context="render"}
-formattableOutput("correlationTable")
+sliderInput("correlationThreshold", "Select significance threshold:", 0.00, 1.00, 0.20, width="100%")
+uiOutput("correlationTable")
 ```
 
 ```{r context="server"}
-output$correlationTable <- renderFormattable({
+output$correlationTable <- renderUI({
   shiny::validate(
     need(input$dependentvar, message=FALSE),
     need(input$independentvar, message=FALSE)
@@ -272,13 +273,15 @@ output$correlationTable <- renderFormattable({
   independentvar <- input$independentvar
   dataset <- isolate(dataset())
   df <- as.data.frame(cor(dataset[,c(dependentvar,independentvar)]))
+  df[abs(df) < input$correlationThreshold] <- NA
   
   normalize.abs <- function(x, min=0, max=1, na.rm=FALSE) normalize(abs(x), min, max, na.rm)
+  normalize.cor <- function(x, min=0, max=1, na.rm=FALSE) abs(x)
   x <- lapply(colnames(df), function(col) {
-    color_bar(rgb(238, 238, 238, max=255), normalize.abs, min=0.1, na.rm=TRUE)
+    color_bar(rgb(238, 238, 238, max=255), normalize.cor, min=0.1, na.rm=TRUE)
   })
   names(x) <- colnames(df)
-  formattable(df, x, digits=2)
+  HTML(gsub("NA", "", format_table(df, x, digits=2)))
 })
 ```
 
