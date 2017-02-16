@@ -140,13 +140,13 @@ The following datasets are readily available for analysis. You can specify a cus
 # Major markets
 fluidRow(column(12, 
   selectInput("datasetused", 
-              "Select the dataset to use",
+              "Select the dataset to use:",
               choices = c("[Custom...]", names(all_datasets)),
               selected = "SalesExerciseData",
               multiple=FALSE, width="100%")
 ))
 conditionalPanel("input.datasetused=='[Custom...]'", fluidRow(column(12,
-  fileInput("dataFile", "",
+  fileInput("dataFile", "Upload a custom dataset:",
             # http://stackoverflow.com/questions/11832930/html-input-file-accept-attribute-file-type-csv
             accept = (".csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
             width = "100%")
@@ -193,7 +193,7 @@ uiOutput("independentvarUI")
 output$dependentvarUI <- renderUI({fluidRow(column(12, 
   selectInput(
     "dependentvar", 
-    "Select the Dependent Variable to use",
+    "Select the Dependent Variable to use:",
     choices = colnames(dataset()),
     selected = "SALES",
     multiple=FALSE, width="100%"
@@ -203,7 +203,7 @@ output$dependentvarUI <- renderUI({fluidRow(column(12,
 output$independentvarUI <- renderUI({fluidRow(column(12, 
   selectizeInput(
     "independentvar", 
-    "Select the Independent Variables to use",
+    "Select the Independent Variables to use:",
     choices = setdiff(colnames(dataset()),input$dependentvar),
     selected = setdiff(colnames(dataset()),input$dependentvar),
     multiple=TRUE, width="100%",
@@ -223,14 +223,14 @@ tags$div(style='height:600px', c3Output("scatterC3"))
 output$scatterUI <- renderUI({fluidRow(
   column(6, selectInput(
     "scatter1", 
-    "Select the x-axis Variable",
+    "Select the x-axis Variable:",
     choices = colnames(dataset()),
     selected = colnames(dataset())[1],
     multiple=FALSE, width="100%")
   ),
   column(6, selectInput(
     "scatter2", 
-    "Select the y-axis Variable",
+    "Select the y-axis Variable:",
     choices = colnames(dataset()),
     selected = colnames(dataset())[2],
     multiple=FALSE, width="100%")
@@ -332,7 +332,7 @@ output$regressionHTML <- renderUI({
 
 ## Residual Analysis
 
-### Plot of the Residuals
+### Plot
 
 ```{r context="render"}
 tags$div(style='height:600px', c3Output("residualsPlot"))
@@ -355,7 +355,7 @@ output$residualsPlot <- renderC3({
 })
 ```
 
-### Residuals Histogram
+### Histogram
 
 ```{r context="render"}
 tags$div(style='height:600px', c3Output("residualsHist"))
@@ -375,7 +375,7 @@ output$residualsHist <- renderC3({
 })
 ```
 
-### Residuals Scatterplots
+### Scatterplots
 
 ```{r context="render"}
 uiOutput("resscatterUI")
@@ -386,7 +386,7 @@ tags$div(style='height:600px', c3Output("resscatterPlot"))
 output$resscatterUI <- renderUI({fluidRow(column(12,
   selectInput(
     "resscatter1", 
-    "Select the Variable to plot against the residuals",
+    "Select the Variable to plot against the residuals:",
     choices = colnames(dataset()),
     selected = colnames(dataset())[1],
     multiple=FALSE, width="100%")
