@@ -1,6 +1,6 @@
 ---
 title: "[Regression App](https://tevgeniou.github.io/RegressionApp/)"
-author: "[T. Evgeniou](http://faculty.insead.edu/theodoros-evgeniou/), INSEAD"
+author: "[INSEAD Decision Sciences](https://www.insead.edu/faculty-research/academic-areas/decision-sciences)"
 output: 
   html_document:
     toc: true
@@ -132,30 +132,9 @@ html.summary.lm <- function (x, digits = max(3L, getOption("digits") - 3L), ...)
 
 <br>
 
-## Overview
+## Dataset
 
-This interactive toolkit can be used to run regression models. A number of datasets are available, however if custom data need to be analysed the source code of the tool should be pulled from the [tool repo](https://github.com/tevgeniou/UDJ) and modified accordingly. 
-
-Regression analysis can be done in different ways. For example
-
-1. Choose dependent and independent variables 
-2. Study scatterplots, check for outliers and correlation matrix (also look for Multicollinerarity).
-3. Run a first regression.
-4. Deal with multicolinearity. 
-5. If F-test is not  significant, then do not continue, or return to step 1.
-6. Check for significance of coefficients (t-test)
-7. Deal with insignificant variables
-8. Check regression assumptions using residual analysis
-9. Consider nonlinear transformations and other independent variables
-9. Use adjusted R-square, as well as intuition, to select among different regressions
-10. Interpret, explain, and predict (point and confidence intervals)
-11. Check again for outliers and if necessary go back to step 2 or 1
-
-The sections below allow the analysis following such a process. 
-
-## Select Dataset
-
-The following datasets are available for analysis using the web-based tool. You can specify a custom dataset, by choosing "Custom..." and uploading your data file (in .CSV or .XLSX format).
+The following datasets are readily available for analysis. You can specify a custom dataset, by choosing "Custom..." and uploading your data file (in .CSV or .XLSX format).
 
 ```{r context="render"}
 # Major markets
@@ -203,7 +182,7 @@ dataset <- reactive({
 })
 ```
 
-## Select Variables
+## Variables
 
 ```{r context="render"}
 uiOutput("dependentvarUI")
@@ -233,7 +212,7 @@ output$independentvarUI <- renderUI({fluidRow(column(12,
 ))})
 ```
 
-## Study Scatterplots
+## Scatterplots
 
 ```{r context="render"}
 uiOutput("scatterUI")
@@ -275,7 +254,7 @@ output$scatterC3 <- renderC3({
 })
 ```
 
-## Study Correlation
+## Correlations
 
 ```{r context="render"}
 formattableOutput("correlationTable")
