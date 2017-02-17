@@ -96,12 +96,13 @@ html.summary.lm <- function (x, digits = max(3L, getOption("digits") - 3L), ...)
 #                    cutpoints = c(0,  .001,.01,.05, .1, 1),
 #                    symbols   =  c("***","**","*","."," "))
                      cutpoints = c(0, .01, .05, .1,  1),
-                     symbols   = c("**", "*", "+", " "))
+                     symbols   = c(as.character(icon("star")), as.character(icon("half-star-o")), as.character(icon("star-o")), " "))
     Cf <- cbind.data.frame(coefs, Signif=format(Signif))
-    tag.table(Cf, digits=digits)
-    tag.print(tags$div(style="margin-top:-10px; margin-bottom:20px;", 
+    tag.table(Cf, digits=digits, escape="FALSE")
+    tag.print(tags$div(style="margin-top:-10px; margin-bottom:25px; margin-left:9px;", 
       "Signif. codes:", 
-      tags$pre(attr(Signif,"legend"))
+#     tags$pre(attr(Signif,"legend"))
+      icon("star"), ".01", icon("star-half-o"), ".05", icon("star-o"), ".1"
     ))
   }
 
@@ -259,7 +260,7 @@ output$scatterC3 <- renderC3({
 ## Correlations
 
 ```{r context="render"}
-sliderInput("correlationThreshold", "Select significance threshold:", 0.00, 1.00, 0.20, width="100%")
+sliderInput("correlationThreshold", "Select significance threshold:", 0.00, 1.00, 0.10, width="100%")
 uiOutput("correlationTable")
 ```
 
