@@ -9,15 +9,19 @@ output:
       smooth_scroll: true
     toc_depth: 3
     theme: paper
-runtime: shiny
+runtime: shiny_prerendered
 ---
 
 `r knitr::opts_knit$set(progress=FALSE, verbose=FALSE)`
 
-```{r echo=FALSE, eval=TRUE, message=FALSE, warning=FALSE}
+```{r context="setup", echo=FALSE}
 suppressPackageStartupMessages({
   library(shiny)
   library(knitr)
+  library(openxlsx)
+  library(stats)
+  library(c3)           # devtools::install_github("mrjoh3/c3")
+  library(formattable)  # devtools::install_github("vkapartzianis/formattable")
   load("AllDatasets.Rdata")
 })  # end suppressPackageStartupMessages
 
@@ -29,116 +33,268 @@ tags$style(type="text/css", # see #96 for details
     div.tocify { width: 16%; }
   }"
 )
+
+tags$style(type="text/css", ".c3 svg { font-size:13px; font-family:\"Roboto\", \"Helvetica Neue\", Helvetica, Arial, sans-serif; }")
+tags$style(type="text/css", ".formattable_widget { overflow:auto; max-height:425px; margin-bottom:23px; }")
+tags$style(type="text/css", ".formattable_widget table { margin-bottom:0; }")
+tags$style(type="text/css", ".formattable_widget td, .formattable_widget th { white-space: nowrap; }")
+
+opts_chunk$set(echo=FALSE)
+
+html.summary.lm <- function (x, digits = max(3L, getOption("digits") - 3L), ...) {
+  tag.list <- list()
+  tag.print <- function(...) tag.list <<- c(tag.list, tagList(...))
+  tag.table <- function(x, ...) tag.print(tags$div(class="formattable_widget", HTML(kable(as.data.frame(x), format="html", table.attr = "class='table'", ...))))
+  
+# tag.print(
+#   tags$h4("Call:"),
+#   tags$pre(paste(deparse(x$call), sep="\n", collapse = "\n")),
+#   tags$br()
+# )
+  
+# resid <- x$residuals
+  df <- x$df
+  rdf <- df[2L]
+# tag.print(tags$h4(paste0(
+#   if(!is.null(x$weights) && diff(range(x$weights))) "Weighted ",
+#   "Residuals:"
+# )))
+# if (rdf > 5L) {
+#   nam <- c("Min", "1Q", "Median", "3Q", "Max")
+#   rq <- if (length(dim(resid)) == 2L) {
+#     structure(apply(t(resid), 1L, quantile),
+#       dimnames = list(nam, dimnames(resid)[[2L]]))
+#   } else  {
+#     zz <- zapsmall(quantile(resid), digits + 1L)
+#     structure(zz, names = nam)
+#   }
+#   tag.table(t(rq), digits = digits, ...)
+# } else if (rdf > 0L) {
+#   tag.table(t(resid), digits = digits, ...)
+# } else { # rdf == 0 : perfect fit!
+#   tag.print(paste("ALL", df[1L], "residuals are 0: no residual degrees of freedom!"))
+# }
+  
+  tag.print(tags$h4("Coefficients:"))
+  if (length(x$aliased) == 0L) {
+    tag.print("No Coefficients")
+  } else {
+    if (nsingular <- df[3L] - df[1L]) {
+      tag.print(paste0("(", nsingular, " not defined because of singularities)"))
+    }
+    coefs <- x$coefficients
+    if(any(aliased <- x$aliased)) {
+      cn <- names(aliased)
+      coefs <- matrix(NA, length(aliased), 4, dimnames=list(cn, colnames(coefs)))
+      coefs[!aliased, ] <- x$coefficients
+    }
+    # TODO: handle `Signif` computation errors and NAs in `coefs`
+    nc <- ncol(coefs)
+    xm <- data.matrix(coefs)
+    pv <- as.vector(xm[, nc]) # drop names
+    Signif <- symnum(pv, corr = FALSE, na = FALSE,
+#                    cutpoints = c(0,  .001,.01,.05, .1, 1),
+#                    symbols   =  c("***","**","*","."," "))
+                     cutpoints = c(0, .01, .05, .1,  1),
+                     symbols   = c(as.character(icon("star")), as.character(icon("star-half-o")), as.character(icon("star-o")), " "))
+    Cf <- cbind.data.frame(coefs, Signif=format(Signif))
+    tag.table(Cf, digits=digits, escape="FALSE")
+    tag.print(tags$div(style="margin-top:-10px; margin-bottom:25px; margin-left:9px;", 
+      "Signif. codes:", 
+#     tags$pre(attr(Signif,"legend"))
+      icon("star"), ".01", icon("star-half-o"), ".05", icon("star-o"), ".1"
+    ))
+  }
+
+  tag.print(tags$h4("Statistics:"))
+  tag.print(
+    tags$b("Residual standard error:"),
+    paste(format(signif(x$sigma, digits)), "on", rdf, "degrees of freedom")
+  )
+  if (nzchar(mess <- naprint(x$na.action))) {
+    tag.print(paste0("  (",mess, ")"))
+  }
+  if (!is.null(x$fstatistic)) {
+    tag.print(
+      tags$br(),
+      tags$b("Multiple R-squared:"), 
+      formatC(x$r.squared, digits=digits),
+      tags$b("Adjusted R-squared:"), 
+      formatC(x$adj.r.squared, digits=digits),
+      tags$b("F-statistic:"), 
+      paste(formatC(x$fstatistic[1L], digits = digits), "on", x$fstatistic[2L], "and", x$fstatistic[3L], "DF"),
+      tags$b("p-value:"), 
+      format.pval(pf(x$fstatistic[1L], x$fstatistic[2L], x$fstatistic[3L], lower.tail=FALSE), digits=digits)
+    )
+  }
+  tag.print(tags$br())
+  
+  tag.list
+}
 ```
 
 <br>
 
 ## Dataset
 
+The following datasets are readily available for analysis. You can specify a custom dataset, by choosing "Custom..." and uploading your data file (in .CSV or .XLSX format).
 
-```{r echo=FALSE, eval=TRUE, message=FALSE, warning=FALSE}
+```{r context="render"}
+# Major markets
+fluidRow(column(12, 
+  selectInput("datasetused", 
+              "Select the dataset to use:",
+              choices = c("[Custom...]", names(all_datasets)),
+              selected = "SalesExerciseData",
+              multiple=FALSE, width="100%")
+))
+conditionalPanel("input.datasetused=='[Custom...]'", fluidRow(column(12,
+  fileInput("dataFile", "Upload a custom dataset:",
+            # http://stackoverflow.com/questions/11832930/html-input-file-accept-attribute-file-type-csv
+            accept = (".csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+            width = "100%")
+)))
+```
 
-fluidPage(
-  # Major markets
-  fluidRow(
-    column(12, selectInput("datasetused", 
-                           "Select the dataset to use",
-                           choices= names(all_datasets),
-                           selected = "SalesExerciseData",
-                           multiple=FALSE, width="100%"))
-  )
-)
-
+```{r context="server"}
 dataset <- reactive({
-  all_datasets[[input$datasetused]]
+  datasetused <- input$datasetused
+  if (datasetused != "[Custom...]") {
+    all_datasets[[input$datasetused]]
+  } else {
+    datapath <- input$dataFile$datapath
+    if (is.null(datapath)) {
+      
+    } else {
+      df <- try(read.csv(datapath, stringsAsFactors=FALSE), silent=TRUE)
+      df.valid <- class(df) == "data.frame" && any(sapply(df, is.numeric))
+      if (!df.valid) {
+        df <- try(read.xlsx(datapath), silent=TRUE)
+        df.valid <- class(df) == "data.frame" && any(sapply(df, is.numeric))
+      }
+      if (!df.valid) {
+        showModal(modalDialog(title="Error", HTML("The data file contains no valid numeric variables.<br><br>Common problems include a column separator other than the comma (`,`), a decimal point other than the period (`.`) or multiple tables/sheets in Excel documents.")))
+        shiny::validate(need(df.valid, message=FALSE))
+      }
+      if (is.null(rownames(df)) || identical(rownames(df), as.character(1:nrow(df)))) {
+        rownames(df) <- paste0("observation ", sprintf("%02i", 1:nrow(df)))
+      }
+      df
+    }
+  }
 })
-
 ```
 
 ## Variables
 
-```{r echo=FALSE, eval=TRUE, message=FALSE, warning=FALSE}
-renderUI({fluidPage(
-  fluidRow(
-    column(12, selectInput("dependentvar", 
-                           "Select the Dependent Variable to use",
-                           choices= colnames(dataset()),
-                           selected = "SALES",
-                           multiple=FALSE, width="100%"))
-  )
-)
-})
-
-renderUI({fluidPage(
-  fluidRow(
-    column(12, selectizeInput("independentvar", 
-                              "Select the Independent Variables to use",
-                              choices= setdiff(colnames(dataset()),input$dependentvar),
-                              selected = setdiff(colnames(dataset()),input$dependentvar),
-                              multiple=TRUE, width="100%",
-                              options=list(plugins=c("remove_button","drag_drop"))))
-  )
-)
-})
+```{r context="render"}
+uiOutput("dependentvarUI")
+uiOutput("independentvarUI")
 ```
 
+```{r context="server"}
+output$dependentvarUI <- renderUI({fluidRow(column(12, 
+  selectInput(
+    "dependentvar", 
+    "Select the Dependent Variable to use:",
+    choices = colnames(dataset()),
+    selected = "SALES",
+    multiple=FALSE, width="100%"
+  )
+))})
+
+output$independentvarUI <- renderUI({fluidRow(column(12, 
+  selectizeInput(
+    "independentvar", 
+    "Select the Independent Variables to use:",
+    choices = setdiff(colnames(dataset()),input$dependentvar),
+    selected = setdiff(colnames(dataset()),input$dependentvar),
+    multiple=TRUE, width="100%",
+    options=list(plugins=c("remove_button","drag_drop"))
+  )
+))})
+```
 
 ## Scatterplots
 
-```{r echo=FALSE, eval=TRUE, message=FALSE, warning=FALSE}
-renderUI({fluidPage(
-  fluidRow(
-    column(6, selectInput("scatter1", 
-                           "Select the x-axis Variable",
-                           choices= colnames(dataset()),
-                           selected = colnames(dataset())[1],
-                           multiple=FALSE, width="100%")),
-    column(6, selectInput("scatter2", 
-                           "Select the y-axis Variable",
-                           choices= colnames(dataset()),
-                           selected = colnames(dataset())[2],
-                           multiple=FALSE, width="100%"))
-    
+```{r context="render"}
+uiOutput("scatterUI")
+tags$div(style='height:600px', c3Output("scatterC3"))
+```
+
+```{r context="server"}
+output$scatterUI <- renderUI({fluidRow(
+  column(6, selectInput(
+    "scatter1", 
+    "Select the x-axis Variable:",
+    choices = colnames(dataset()),
+    selected = colnames(dataset())[1],
+    multiple=FALSE, width="100%")
+  ),
+  column(6, selectInput(
+    "scatter2", 
+    "Select the y-axis Variable:",
+    choices = colnames(dataset()),
+    selected = colnames(dataset())[2],
+    multiple=FALSE, width="100%")
   )
-)
-})
+)})
 
-
-renderPlot({
-  validate(
+output$scatterC3 <- renderC3({
+  shiny::validate(
     need(input$scatter1, message=FALSE),
     need(input$scatter2, message=FALSE)
   )
   scatter1 <- input$scatter1
   scatter2 <- input$scatter2
   dataset <- isolate(dataset())
-  plot(dataset[[scatter1]],dataset[[scatter2]], xlab=scatter1, ylab=scatter2)
-}) 
-
+  c3(cbind.data.frame(x=dataset[[scatter1]],y=dataset[[scatter2]]), x="x", y="y") %>%
+    c3_scatter() %>%
+    xAxis(label=scatter1) %>% 
+    # format y Axis for floating point imprecision, see https://github.com/c3js/c3/issues/797
+    yAxis(label=scatter2, tick=list(format=htmlwidgets::JS("d3.format('.3n')"))) %>% # 
+    legend(hide="y")
+})
 ```
 
 ## Correlations
 
-```{r echo=FALSE, eval=TRUE, message=FALSE, warning=FALSE}
-renderTable({
-  validate(
+```{r context="render"}
+sliderInput("correlationThreshold", "Select significance threshold:", 0.00, 1.00, 0.10, width="100%")
+uiOutput("correlationTable")
+```
+
+```{r context="server"}
+output$correlationTable <- renderUI({
+  shiny::validate(
     need(input$dependentvar, message=FALSE),
     need(input$independentvar, message=FALSE)
   )
   dependentvar <- input$dependentvar
   independentvar <- input$independentvar
   dataset <- isolate(dataset())
-  cor(dataset[,c(dependentvar,independentvar)])
+  df <- as.data.frame(cor(dataset[,c(dependentvar,independentvar)]))
+  df[abs(df) < input$correlationThreshold] <- NA
+  
+  normalize.abs <- function(x, min=0, max=1, na.rm=FALSE) normalize(abs(x), min, max, na.rm)
+  normalize.cor <- function(x, min=0, max=1, na.rm=FALSE) abs(x)
+  x <- lapply(colnames(df), function(col) {
+    color_bar(rgb(238, 238, 238, max=255), normalize.cor, min=0.1, na.rm=TRUE)
+  })
+  names(x) <- colnames(df)
+  tags$div(class="formattable_widget", HTML(gsub("NA", "", format_table(df, x, digits=2))))
 })
-
 ```
-
 
 ## Regression Output
 
-```{r echo=FALSE, eval=TRUE, message=FALSE, warning=FALSE}
+```{r context="render"}
+uiOutput("regressionHTML")
+```
+
+```{r context="server"}
 the_regression_output <- reactive({
-  validate(
+  shiny::validate(
     need(input$dependentvar, message=FALSE),
     need(input$independentvar, message=FALSE)
   )
@@ -147,6 +303,7 @@ the_regression_output <- reactive({
   dataset <- isolate(dataset())
   regression_model = as.formula(paste(dependentvar, " ~ ",paste(independentvar,collapse = "+"), sep=""))
   the_fit<-lm(regression_model,data=dataset)      
+  save(the_fit, file="the_fit.RData")
   
   print_the_fit<-as.list(summary(the_fit))
   the_res= c(
@@ -173,63 +330,88 @@ the_regression_output <- reactive({
   )
 })
 
-renderTable({
+output$regressionHTML <- renderUI({
   the_fit_all = the_regression_output()
-  summary(the_fit_all$the_fit)
+  html.summary.lm(summary(the_fit_all$the_fit))
 })
-
 ```
 
 ## Residual Analysis
 
-### Plot of the Residuals
-```{r echo=FALSE, eval=TRUE, message=FALSE, warning=FALSE}
+### Plot
+
+```{r context="render"}
+tags$div(style='height:600px', c3Output("residualsPlot"))
+```
+
+```{r context="server"}
 the_residuals_plot_tab<-reactive({
   the_fit = the_regression_output()    
   residuals(the_fit$the_fit)       
 })
 
-renderPlot({    
-  plot(the_residuals_plot_tab(),xlab="Observations",ylab="Residuals",main="The Residuals")
+output$residualsPlot <- renderC3({
+  y <- the_residuals_plot_tab()
+  c3(data.frame(x=1:length(y), y=y), x="x", y="y") %>%
+    c3_scatter() %>%
+    xAxis(label="Observations") %>% 
+    # format y Axis for floating point imprecision, see https://github.com/c3js/c3/issues/797
+    yAxis(label="Residuals", tick=list(format=htmlwidgets::JS("d3.format('.3n')"))) %>% # 
+    legend(hide="y")
 })
 ```
 
+### Histogram
 
-### Residuals Histogram
-```{r echo=FALSE, eval=TRUE, message=FALSE, warning=FALSE}
-
-renderPlot({    
-  dataused = the_residuals_plot_tab()
-  hist(dataused, main = "Histogram of the Residuals", breaks = max(5,round(length(dataused)/5)))
-})
-
+```{r context="render"}
+tags$div(style='height:600px', c3Output("residualsHist"))
 ```
 
-### Residuals Scatterplots
+```{r context="server"}
+output$residualsHist <- renderC3({    
+  x <- the_residuals_plot_tab()
+# h <- hist(x, breaks=max(5, round(length(x)/5)), plot=FALSE)
+  h <- hist(x, plot=FALSE)
+  df <- data.frame(x=head(h$breaks, -1), Frequency=h$counts)
+  c3(df, x="x", y="Frequency") %>%
+    c3_bar() %>%
+    # format y Axis for floating point imprecision, see https://github.com/c3js/c3/issues/797
+    yAxis(label="Frequency", tick=list(format=htmlwidgets::JS("d3.format('.3n')"))) %>% # 
+    legend(hide="Frequency")
+})
+```
 
-```{r echo=FALSE, eval=TRUE, message=FALSE, warning=FALSE}
-renderUI({fluidPage(
-  fluidRow(
-    column(12, selectInput("resscatter1", 
-                           "Select the Variable to plot against the residuals",
-                           choices= colnames(dataset()),
-                           selected = colnames(dataset())[1],
-                           multiple=FALSE, width="100%"))
+### Scatterplots
+
+```{r context="render"}
+uiOutput("resscatterUI")
+tags$div(style='height:600px', c3Output("resscatterPlot"))
+```
+
+```{r context="server"}
+output$resscatterUI <- renderUI({fluidRow(column(12,
+  selectInput(
+    "resscatter1", 
+    "Select the Variable to plot against the residuals:",
+    choices = colnames(dataset()),
+    selected = colnames(dataset())[1],
+    multiple=FALSE, width="100%")
   )
-)
-})
+)})
 
-
-
-renderPlot({
-  validate(
+output$resscatterPlot <- renderC3({
+  shiny::validate(
     need(input$resscatter1, message=FALSE)
   )
   resscatter1 <- input$resscatter1
   dataset <- isolate(dataset())
-  plot(dataset[[resscatter1]],the_residuals_plot_tab(),xlab=resscatter1,ylab="Residuals")
+  c3(cbind.data.frame(x=dataset[[resscatter1]],y=round(the_residuals_plot_tab(),2)), x="x", y="y") %>%
+    c3_scatter() %>%
+    xAxis(label=resscatter1) %>% 
+    # format y Axis for floating point imprecision, see https://github.com/c3js/c3/issues/797
+    yAxis(label="Residuals", tick=list(format=htmlwidgets::JS("d3.format('.3n')"))) %>% # 
+    legend(hide="y")
 })
-
 ```
 
 <hr>
