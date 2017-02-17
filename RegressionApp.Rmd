@@ -96,7 +96,7 @@ html.summary.lm <- function (x, digits = max(3L, getOption("digits") - 3L), ...)
 #                    cutpoints = c(0,  .001,.01,.05, .1, 1),
 #                    symbols   =  c("***","**","*","."," "))
                      cutpoints = c(0, .01, .05, .1,  1),
-                     symbols   = c(as.character(icon("star")), as.character(icon("half-star-o")), as.character(icon("star-o")), " "))
+                     symbols   = c(as.character(icon("star")), as.character(icon("star-half-o")), as.character(icon("star-o")), " "))
     Cf <- cbind.data.frame(coefs, Signif=format(Signif))
     tag.table(Cf, digits=digits, escape="FALSE")
     tag.print(tags$div(style="margin-top:-10px; margin-bottom:25px; margin-left:9px;", 
@@ -282,7 +282,7 @@ output$correlationTable <- renderUI({
     color_bar(rgb(238, 238, 238, max=255), normalize.cor, min=0.1, na.rm=TRUE)
   })
   names(x) <- colnames(df)
-  HTML(gsub("NA", "", format_table(df, x, digits=2)))
+  tags$div(class="formattable_widget", HTML(gsub("NA", "", format_table(df, x, digits=2))))
 })
 ```
 
